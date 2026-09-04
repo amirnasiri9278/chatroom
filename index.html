@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TJ Talk</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            direction: rtl;
+        }
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #e5e5e5;
+        }
+        .login-box {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .login-box input {
+            display: block;
+            width: 200px;
+            margin: 10px auto;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .login-box button {
+            padding: 8px 15px;
+            background-color: #5865f2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .container {
+            display: none;
+            flex-direction: row;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #2f3136;
+            color: white;
+            padding: 10px;
+        }
+        .sidebar h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+        .sidebar li {
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .sidebar li:hover {
+            background-color: #40444b;
+        }
+        .sidebar li.selected {
+            background-color: #5865f2;
+        }
+        .sidebar li.online::before {
+            content: "●";
+            color: green;
+            margin-left: 5px;
+        }
+        .sidebar li.offline::before {
+            content: "●";
+            color: gray;
+            margin-left: 5px;
+        }
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #36393f;
+        }
+        .chat-header {
+            background-color: #5865f2;
+            color: white;
+            padding: 10px;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-header span {
+            font-size: 14px;
+        }
+        .chat-header button {
+            padding: 5px 10px;
+            background-color: #ff5555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            color: white;
+        }
+        .message {
+            margin: 5px 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.sent {
+            align-items: flex-start;
+        }
+        .message.received {
+            align-items: flex-end;
+        }
+        .message .header {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+        }
+        .message .header .avatar {
+            width: 20px;
+            height: 20px;
+            background-color: #ccc;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        .message .content {
+            padding: 8px;
+            border-radius: 10px;
+            max-width: 70%;
+        }
+        .message.sent .content {
+            background-color: #5865f2;
+        }
+        .message.received .content {
+            background-color: #ffffff;
+            color: black;
+        }
+        .message .timestamp {
+            font-size: 10px;
+            color: #aaa;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            background-color: #40444b;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+        .chat-input button {
+            padding: 8px 15px;
+            background-color: #5865f2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-screen" id="login-screen">
+        <div class="login-box">
+            <h2>ورود به TJ Talk</h2>
+            <input type="text" id="username" placeholder="نام کاربری">
+            <input type="password" id="password" placeholder="رمز عبور">
+            <button onclick="login()">ورود</button>
+        </div>
+    </div>
+    <div class="container" id="chat-container">
+        <div class="sidebar">
+            <h3>کاربران (<span id="user-count">0</span>)</h3>
+            <ul id="user-list"></ul>
+        </div>
+        <div class="chat-area">
+            <div class="chat-header">
+                <span>TJ Talk</span>
+                <span id="chat-with">در حال چت عمومی</span>
+                <button onclick="resetChat()" style="display: none;" id="reset-btn">بازگشت به چت عمومی</button>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="پیام خود را تایپ کنید...">
+                <button onclick="sendMessage()">ارسال</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const loginScreen = document.getElementById("login-screen");
+        const chatContainer = document.getElementById("chat-container");
+        let currentUsername;
+        let selectedUser = null;
+        let ws;
+
+        function login() {
+            const username = document.getElementById("username").value.trim();
+            const password = document.getElementById("password").value.trim();
+            if (username && password) {
+                loginScreen.style.display = "none";
+                chatContainer.style.display = "flex";
+                currentUsername = username;
+                startChat(username);
+            } else {
+                alert("لطفاً نام کاربری و رمز عبور را وارد کنید!");
+            }
+        }
+
+        function startChat(username) {
+            ws = new WebSocket("ws://localhost:5000");
+
+            ws.onopen = () => {
+                console.log("WebSocket connected");
+                ws.send(JSON.stringify({ type: "join", username }));
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                alert("خطایی در اتصال به سرور رخ داد. لطفاً سرور را بررسی کنید.");
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === "message") {
+                    if (data.isPrivate && (data.to === username || data.username === username)) {
+                        addMessage(data.username, data.message, data.username === username, data.timestamp, true);
+                    } else if (!data.isPrivate) {
+                        addMessage(data.username, data.message, data.username === username, data.timestamp, false);
+                    }
+                } else if (data.type === "join") {
+                    addMessage("سیستم", `${data.username} به چت پیوست`, false, data.timestamp, false);
+                    updateUserList(data.users, data.statuses);
+                } else if (data.type === "users") {
+                    updateUserList(data.users, data.statuses);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket disconnected");
+                alert("اتصال به سرور قطع شد!");
+            };
+        }
+
+        function addMessage(username, message, isSent, timestamp, isPrivate) {
+            const messagesDiv = document.getElementById("chat-messages");
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `message ${isSent ? "sent" : "received"}`;
+            messageDiv.innerHTML = `
+                <div class="header">
+                    <span>${username}${isPrivate ? " (خصوصی)" : ""}</span>
+                    <div class="avatar"></div>
+                </div>
+                <div class="content">${message}</div>
+                <div class="timestamp">${new Date(timestamp).toLocaleTimeString()}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateUserList(users, statuses) {
+            const userList = document.getElementById("user-list");
+            const userCount = document.getElementById("user-count");
+            userList.innerHTML = "";
+            userCount.textContent = users.length;
+            users.forEach((user, index) => {
+                const li = document.createElement("li");
+                li.className = statuses[index] ? "online" : "offline";
+                if (user === selectedUser) li.classList.add("selected");
+                li.textContent = user;
+                li.onclick = () => {
+                    selectUser(user);
+                };
+                userList.appendChild(li);
+            });
+        }
+
+        function selectUser(user) {
+            if (user === currentUsername) {
+                alert("نمی‌توانید با خودتان چت کنید!");
+                return;
+            }
+            selectedUser = user;
+            document.getElementById("chat-with").textContent = `در حال چت با ${user}`;
+            document.getElementById("reset-btn").style.display = "block";
+            updateUserList(users, statuses);
+        }
+
+        function resetChat() {
+            selectedUser = null;
+            document.getElementById("chat-with").textContent = "در حال چت عمومی";
+            document.getElementById("reset-btn").style.display = "none";
+            updateUserList(users, statuses);
+        }
+
+        function sendMessage() {
+            const input = document.getElementById("message-input");
+            const message = input.value.trim();
+            if (!message) {
+                alert("لطفاً یک پیام وارد کنید!");
+                return;
+            }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("اتصال به سرور برقرار نیست. لطفاً سرور را بررسی کنید.");
+                return;
+            }
+            try {
+                const timestamp = Date.now();
+                if (selectedUser) {
+                    ws.send(JSON.stringify({
+                        type: "message",
+                        username: currentUsername,
+                        message,
+                        timestamp,
+                        isPrivate: true,
+                        to: selectedUser
+                    }));
+                } else {
+                    ws.send(JSON.stringify({
+                        type: "message",
+                        username: currentUsername,
+                        message,
+                        timestamp,
+                        isPrivate: false
+                    }));
+                }
+                input.value = "";
+            } catch (error) {
+                console.error("Error sending message:", error);
+                alert("خطایی در ارسال پیام رخ داد!");
+            }
+        }
+
+        document.getElementById("message-input").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+    </script>
+</body>
+</html>
